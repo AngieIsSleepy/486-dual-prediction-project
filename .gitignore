@@ -1,0 +1,21 @@
+# Python 环境
+venv/
+__pycache__/
+*.py[cod]
+
+# 数据集 (非常重要！)
+# 建议所有原始数据放在 data/ 目录下并忽略
+data/raw/
+data/processed/
+*.csv
+*.json
+*.jsonl
+
+# 模型权重与日志
+models/
+outputs/
+.ipynb_checkpoints/
+.DS_Store
+
+# 环境变量
+.env
