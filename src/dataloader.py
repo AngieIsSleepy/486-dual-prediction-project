@@ -20,6 +20,5 @@ class MentalHealthDataLoader:
         path = os.path.join(self.data_dir, "mbti_clean.csv")
         return pd.read_csv(path)
 
-# 使用示例：
 # loader = MentalHealthDataLoader()
 # df = loader.load_classification_data()

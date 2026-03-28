@@ -1,0 +1,129 @@
+This is the model training output just in case.
+
+=== Mental State ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+config.json: 100% 483/483 [00:00<00:00, 1.87MB/s]
+tokenizer_config.json: 100% 48.0/48.0 [00:00<00:00, 236kB/s]
+vocab.txt: 232kB [00:00, 2.31MB/s]
+tokenizer.json: 466kB [00:00, 3.83MB/s]
+Map: 100% 38400/38400 [00:32<00:00, 1191.77 examples/s]
+Map: 100% 9600/9600 [00:08<00:00, 1098.38 examples/s]
+model.safetensors: 100% 268M/268M [00:01<00:00, 147MB/s]
+Loading weights: 100% 100/100 [00:00<00:00, 1477.22it/s, Materializing param=distilbert.transformer.layer.5.sa_layer_norm.weight]
+DistilBertForSequenceClassification LOAD REPORT from: distilbert-base-uncased
+Key                     | Status     | 
+------------------------+------------+-
+vocab_transform.weight  | UNEXPECTED | 
+vocab_layer_norm.weight | UNEXPECTED | 
+vocab_layer_norm.bias   | UNEXPECTED | 
+vocab_projector.bias    | UNEXPECTED | 
+vocab_transform.bias    | UNEXPECTED | 
+classifier.bias         | MISSING    | 
+pre_classifier.bias     | MISSING    | 
+classifier.weight       | MISSING    | 
+pre_classifier.weight   | MISSING    | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING	:those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+{'loss': '1.008', 'grad_norm': '6.603', 'learning_rate': '1.861e-05', 'epoch': '0.2083'}
+{'loss': '0.7907', 'grad_norm': '6.23', 'learning_rate': '1.723e-05', 'epoch': '0.4167'}
+{'loss': '0.7491', 'grad_norm': '8.449', 'learning_rate': '1.584e-05', 'epoch': '0.625'}
+{'loss': '0.723', 'grad_norm': '6.364', 'learning_rate': '1.445e-05', 'epoch': '0.8333'}
+ 33% 2400/7200 [07:46<16:11,  4.94it/s]
+
+                                       
+{'eval_loss': '0.7083', 'eval_runtime': '40.36', 'eval_samples_per_second': '237.9', 'eval_steps_per_second': '29.73', 'epoch': '1'}
+ 33% 2400/7200 [08:26<16:11,  4.94it/s]
+100% 1200/1200 [00:40<00:00, 29.23it/s]
+                                       
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:04<00:00,  4.60s/it]
+{'loss': '0.7027', 'grad_norm': '4.063', 'learning_rate': '1.306e-05', 'epoch': '1.042'}
+{'loss': '0.6114', 'grad_norm': '11.5', 'learning_rate': '1.167e-05', 'epoch': '1.25'}
+{'loss': '0.6079', 'grad_norm': '8.91', 'learning_rate': '1.028e-05', 'epoch': '1.458'}
+{'loss': '0.612', 'grad_norm': '5.417', 'learning_rate': '8.892e-06', 'epoch': '1.667'}
+{'loss': '0.5745', 'grad_norm': '7.575', 'learning_rate': '7.503e-06', 'epoch': '1.875'}
+ 67% 4800/7200 [16:38<08:04,  4.96it/s]
+
+                                       
+{'eval_loss': '0.671', 'eval_runtime': '40.45', 'eval_samples_per_second': '237.3', 'eval_steps_per_second': '29.67', 'epoch': '2'}
+ 67% 4800/7200 [17:18<08:04,  4.96it/s]
+100% 1200/1200 [00:40<00:00, 29.47it/s]
+                                       
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:01<00:00,  1.18s/it]
+{'loss': '0.5551', 'grad_norm': '5.384', 'learning_rate': '6.114e-06', 'epoch': '2.083'}
+{'loss': '0.4806', 'grad_norm': '10.7', 'learning_rate': '4.725e-06', 'epoch': '2.292'}
+{'loss': '0.4867', 'grad_norm': '6.008', 'learning_rate': '3.336e-06', 'epoch': '2.5'}
+{'loss': '0.4921', 'grad_norm': '7.778', 'learning_rate': '1.947e-06', 'epoch': '2.708'}
+{'loss': '0.4931', 'grad_norm': '3.787', 'learning_rate': '5.583e-07', 'epoch': '2.917'}
+100% 7200/7200 [25:26<00:00,  4.95it/s]
+                                       
+{'eval_loss': '0.6875', 'eval_runtime': '40.51', 'eval_samples_per_second': '237', 'eval_steps_per_second': '29.62', 'epoch': '3'}
+100% 7200/7200 [26:07<00:00,  4.95it/s]
+100% 1200/1200 [00:40<00:00, 29.77it/s]
+                                       
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:06<00:00,  6.25s/it]
+There were missing keys in the checkpoint model loaded: ['distilbert.embeddings.LayerNorm.weight', 'distilbert.embeddings.LayerNorm.bias'].
+There were unexpected keys in the checkpoint model loaded: ['distilbert.embeddings.LayerNorm.beta', 'distilbert.embeddings.LayerNorm.gamma'].
+{'train_runtime': '1581', 'train_samples_per_second': '72.88', 'train_steps_per_second': '4.555', 'train_loss': '0.6294', 'epoch': '3'}
+100% 7200/7200 [26:20<00:00,  4.55it/s]
+Writing model shards: 100% 1/1 [00:52<00:00, 52.23s/it]
+=== models/mental_state_distilbert ===
+
+
+
+=== Personality (MBTI)===
+Map: 100% 4000/4000 [00:01<00:00, 3606.65 examples/s]
+Map: 100% 1000/1000 [00:00<00:00, 5561.67 examples/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100% 100/100 [00:00<00:00, 365.09it/s, Materializing param=distilbert.transformer.layer.5.sa_layer_norm.weight]
+DistilBertForSequenceClassification LOAD REPORT from: distilbert-base-uncased
+Key                     | Status     | 
+------------------------+------------+-
+vocab_transform.weight  | UNEXPECTED | 
+vocab_layer_norm.weight | UNEXPECTED | 
+vocab_layer_norm.bias   | UNEXPECTED | 
+vocab_projector.bias    | UNEXPECTED | 
+vocab_transform.bias    | UNEXPECTED | 
+classifier.bias         | MISSING    | 
+classifier.weight       | MISSING    | 
+pre_classifier.weight   | MISSING    | 
+pre_classifier.bias     | MISSING    | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING	:those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+ 33% 250/750 [00:41<01:20,  6.19it/s]
+                                     
+{'eval_loss': '2.438', 'eval_runtime': '3.419', 'eval_samples_per_second': '292.5', 'eval_steps_per_second': '36.56', 'epoch': '1'}
+ 33% 250/750 [00:45<01:20,  6.19it/s]
+100% 125/125 [00:03<00:00, 36.13it/s]
+                                     
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:01<00:00,  1.07s/it]
+{'loss': '2.48', 'grad_norm': '3.488', 'learning_rate': '6.693e-06', 'epoch': '2'}
+ 67% 500/750 [01:38<00:44,  5.60it/s]                             
+{'eval_loss': '2.39', 'eval_runtime': '3.789', 'eval_samples_per_second': '263.9', 'eval_steps_per_second': '32.99', 'epoch': '2'}
+ 67% 500/750 [01:42<00:44,  5.60it/s]
+100% 125/125 [00:03<00:00, 32.87it/s]
+                                     
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:05<00:00,  5.78s/it]
+100% 750/750 [02:41<00:00,  4.98it/s]
+                                     
+{'eval_loss': '2.37', 'eval_runtime': '4.461', 'eval_samples_per_second': '224.1', 'eval_steps_per_second': '28.02', 'epoch': '3'}
+100% 750/750 [02:46<00:00,  4.98it/s]
+100% 125/125 [00:04<00:00, 27.96it/s]
+                                     
+Writing model shards:   0% 0/1 [00:00<?, ?it/s]
+Writing model shards: 100% 1/1 [00:06<00:00,  6.44s/it]
+There were missing keys in the checkpoint model loaded: ['distilbert.embeddings.LayerNorm.weight', 'distilbert.embeddings.LayerNorm.bias'].
+There were unexpected keys in the checkpoint model loaded: ['distilbert.embeddings.LayerNorm.beta', 'distilbert.embeddings.LayerNorm.gamma'].
+{'train_runtime': '187', 'train_samples_per_second': '64.17', 'train_steps_per_second': '4.011', 'train_loss': '2.438', 'epoch': '3'}
+100% 750/750 [03:06<00:00,  4.01it/s]
+Writing model shards: 100% 1/1 [00:01<00:00,  1.34s/it]
+=== models/personality_distilbert ===
+
