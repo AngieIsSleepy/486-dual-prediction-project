@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
+try:
+    from sentence_transformers import CrossEncoder
+except Exception:
+    CrossEncoder = None
+
 
 MENTAL_CATEGORY_KEYWORDS = {
     "Anxiety-like": ["anxiety", "stress", "panic", "worry", "burnout"],
@@ -190,3 +195,36 @@ class SoftWeightReranker:
             return float(self.cross_encoder(query, personality_label, document, index))
 
         return 0.0
+
+
+class CrossEncoderScorer:
+    """
+    Lightweight wrapper for an optional cross-encoder reranking stage.
+
+    It combines the user query with the predicted personality label so the final
+    ranking can consider both the immediate problem and the user's style.
+    """
+
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> None:
+        if CrossEncoder is None:
+            raise ImportError(
+                "sentence-transformers CrossEncoder is unavailable. "
+                "Please install sentence-transformers to enable cross-encoder reranking."
+            )
+        self.model_name = model_name
+        self.model = CrossEncoder(model_name)
+
+    def score(
+        self,
+        query: str,
+        personality_label: Optional[str],
+        document: Dict[str, Any],
+    ) -> float:
+        personality_text = ""
+        if personality_label:
+            personality_text = f" Personality style: {personality_label}."
+
+        pair_query = f"User query: {query}.{personality_text}"
+        document_text = str(document.get("text") or document.get("content") or "")
+        score = self.model.predict([(pair_query, document_text)], convert_to_numpy=True)[0]
+        return float(score)
