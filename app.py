@@ -17,10 +17,12 @@ from baseline_predictor import BaselinePredictor
 from reranker import CrossEncoderScorer, SoftWeightReranker
 
 
-try:
-    from query_analyzer import QueryAnalyzer
-except Exception:
-    QueryAnalyzer = None
+# try:
+#     from query_analyzer import QueryAnalyzer
+# except Exception:
+#     QueryAnalyzer = None
+
+from query_analyzer import QueryAnalyzer
 
 try:
     from dense_retriever import DenseRetriever
@@ -44,12 +46,7 @@ def load_baseline_predictor() -> Optional[BaselinePredictor]:
 
 @st.cache_resource
 def load_query_analyzer() -> Optional[Any]:
-    if QueryAnalyzer is None:
-        return None
-    try:
-        return QueryAnalyzer()
-    except Exception:
-        return None
+    return QueryAnalyzer()
 
 
 @st.cache_resource
