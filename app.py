@@ -123,9 +123,12 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
         st.info("No results to display yet.")
         return
 
+    df_corpus = load_qa_corpus()
+
     for index, doc in enumerate(docs, start=1):
         header = f"{index}. {doc.get('topic', 'Untitled')}"
         with st.expander(header, expanded=index <= 3):
+
             st.write(f"**Doc ID:** {doc.get('doc_id', '')}")
             if "retrieval_score" in doc:
                 st.write(f"**Retrieval score:** {doc['retrieval_score']:.4f}")
@@ -136,6 +139,19 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
                 st.write(f"**Cross-encoder score:** {doc.get('cross_encoder_score', 0.0):.4f}")
                 if doc.get("matched_category"):
                     st.write(f"**Matched category:** {doc['matched_category']}")
+            
+            doc_id = doc.get("doc_id", "")
+            matched_row = df_corpus[df_corpus['doc_id'] == doc_id] if not df_corpus.empty else pd.DataFrame()
+            if not matched_row.empty and 'question' in matched_row.columns and 'answer' in matched_row.columns:
+                original_q = matched_row.iloc[0]['question']
+                original_a = matched_row.iloc[0]['answer']
+                st.info(f"**Similar User Input:**\n\n*{original_q}*")
+                st.success(f"**Community's Advice:**\n\n{original_a}")
+
+            else:
+                raw_text = doc.get("text", "")
+                st.info(f"**Community Advice for reference:**\n\n{raw_text}")
+            
             st.write("**Text:**")
             st.write(doc.get("text", ""))
 
