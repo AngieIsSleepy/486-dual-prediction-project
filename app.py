@@ -152,8 +152,6 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
                 raw_text = doc.get("text", "")
                 st.info(f"**Community Advice for reference:**\n\n{raw_text}")
             
-            st.write("**Text:**")
-            st.write(doc.get("text", ""))
 
 
 st.set_page_config(page_title="Mental Health Support Demo", layout="wide")
