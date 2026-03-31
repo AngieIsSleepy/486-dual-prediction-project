@@ -164,17 +164,15 @@ class SoftWeightReranker:
     def _personality_alignment(self, personality_label: Optional[str], document: Dict[str, Any]) -> float:
         if not personality_label:
             return 0.0
-
-        text = str(document.get("text") or document.get("content") or "").lower()
-        label = personality_label.lower()
-
-        if label.startswith("e") and any(keyword in text for keyword in ["talk", "friend", "group", "community"]):
-            return 1.0
-        if label.startswith("i") and any(keyword in text for keyword in ["journal", "reflect", "alone", "quiet"]):
-            return 1.0
-        if "j" in label and any(keyword in text for keyword in ["plan", "routine", "schedule", "track"]):
-            return 1.0
-        if "p" in label and any(keyword in text for keyword in ["explore", "try", "flexible", "creative"]):
+        user_mbti = personality_label.upper()
+        text_upper = str(document.get("text") or document.get("content") or "").upper()
+        doc_mbti_list = []
+        if "mbti_top5" in document:
+            doc_mbti_list = [str(item.get("label", "")).upper() for item in document["mbti_top5"]]
+            if user_mbti in doc_mbti_list:
+                return 1.0
+            
+        if f'"LABEL":"{user_mbti}"' in text_upper or f"'LABEL':'{user_mbti}'" in text_upper or f'"LABEL": "{user_mbti}"' in text_upper:
             return 1.0
         return 0.0
 
