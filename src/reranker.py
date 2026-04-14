@@ -275,7 +275,8 @@ class SoftWeightReranker:
             for sel in selected:
                 sel_id = sel["doc_id"]
                 if sel_id in embedding_map:
-                    sims.append(float(np.dot(cand_emb, embedding_map[sel_id])))
+                    sim = float(np.dot(cand_emb, embedding_map[sel_id]))
+                    sims.append(max(0.0, min(1.0, sim)))
             if sims:
                 return float(max(sims))
 
