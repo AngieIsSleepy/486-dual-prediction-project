@@ -31,7 +31,67 @@ def deduplicate_docs(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen.add(doc_id)
         out.append(doc)
     return out
+def fuse_top_docs(
+    query_id: str,
+    query_text: str,
+    bm25_docs: List[Dict[str, Any]],
+    dense_docs: List[Dict[str, Any]],
+    rerank_docs: List[Dict[str, Any]],
+    final_k: int = 5,
+) -> List[Dict[str, Any]]:
+    weights = {"bm25": 0.25, "dense": 0.35, "rerank": 0.40}
 
+    candidates: Dict[str, Dict[str, Any]] = {}
+
+    def add_docs(docs: List[Dict[str, Any]], source: str) -> None:
+        w = weights[source]
+        for rank_idx, d in enumerate(docs):
+            doc_id = str(d.get("doc_id", "")).strip()
+            if not doc_id:
+                continue
+
+            item = candidates.setdefault(
+                doc_id,
+                {
+                    "query_id": query_id,
+                    "query_text": query_text,
+                    "doc_id": doc_id,
+                    "topic": str(d.get("topic", "")),
+                    "text": str(d.get("text", d.get("content", ""))),
+                    "from_set": set(),
+                    "fuse_score": 0.0,
+                },
+            )
+            item["from_set"].add(source)
+            item["fuse_score"] += w * (1.0 / (rank_idx + 1))
+
+    add_docs(bm25_docs, "bm25")
+    add_docs(dense_docs, "dense")
+    add_docs(rerank_docs, "rerank")
+
+    for item in candidates.values():
+        item["fuse_score"] += 0.05 * (len(item["from_set"]) - 1)
+
+    ranked = sorted(
+        candidates.values(),
+        key=lambda x: (x["fuse_score"], len(x["from_set"])),
+        reverse=True,
+    )[:final_k]
+
+    out = []
+    for i, item in enumerate(ranked, start=1):
+        out.append(
+            {
+                "query_id": item["query_id"],
+                "query_text": item["query_text"],
+                "pool_rank": i,
+                "doc_id": item["doc_id"],
+                "topic": item["topic"],
+                "text": item["text"],
+                "from_system": "|".join(sorted(item["from_set"])),
+            }
+        )
+    return out
 
 def build_bm25(corpus_df: pd.DataFrame) -> BM25Okapi:
     tokenized = [str(x).lower().split() for x in corpus_df["content"].fillna("").tolist()]
@@ -64,6 +124,7 @@ def main() -> None:
     parser.add_argument("--dense_top_k", type=int, default=20)
     parser.add_argument("--rerank_top_k", type=int, default=20)
     parser.add_argument("--rerank_pool_k", type=int, default=60)
+    parser.add_argument("--final_k", type=int, default=5)
     args = parser.parse_args()
 
     queries_path = Path(args.queries)
@@ -119,45 +180,17 @@ def main() -> None:
             enable_diversity_penalty=True,
         )
 
-        source_map: Dict[str, set] = {}
-        doc_store: Dict[str, Dict[str, Any]] = {}
+        top_docs = fuse_top_docs(
+            query_id=query_id,
+            query_text=query_text,
+            bm25_docs=bm25_docs,
+            dense_docs=dense_docs,
+            rerank_docs=rerank_docs,
+            final_k=args.final_k,
+        )
+        rows.extend(top_docs)
 
-        def add_source(docs: List[Dict[str, Any]], source_name: str) -> None:
-            for d in docs:
-                doc_id = str(d.get("doc_id", "")).strip()
-                if not doc_id:
-                    continue
-                source_map.setdefault(doc_id, set()).add(source_name)
-                if doc_id not in doc_store:
-                    doc_store[doc_id] = d
-
-        add_source(bm25_docs, "bm25")
-        add_source(dense_docs, "dense")
-        add_source(rerank_docs, "rerank")
-
-        for doc_id in sorted(source_map.keys()):
-            doc = doc_store.get(doc_id, {})
-            if not doc:
-                hit = corpus_df[corpus_df["doc_id"] == doc_id]
-                if not hit.empty:
-                    doc = {
-                        "doc_id": doc_id,
-                        "topic": str(hit.iloc[0]["topic"]),
-                        "text": str(hit.iloc[0]["content"]),
-                    }
-
-            rows.append(
-                {
-                    "query_id": query_id,
-                    "query_text": query_text,
-                    "doc_id": doc_id,
-                    "topic": str(doc.get("topic", "")),
-                    "text": str(doc.get("text", doc.get("content", ""))),
-                    "from_system": "|".join(sorted(source_map[doc_id])),
-                }
-            )
-
-    output_df = pd.DataFrame(rows).sort_values(by=["query_id", "doc_id"]).reset_index(drop=True)
+    output_df = pd.DataFrame(rows).sort_values(by=["query_id", "pool_rank"]).reset_index(drop=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_df.to_csv(output_path, index=False)
 
