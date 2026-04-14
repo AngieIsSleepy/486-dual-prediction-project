@@ -1,0 +1,169 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Any, Dict, List
+
+import numpy as np
+import pandas as pd
+from rank_bm25 import BM25Okapi
+
+import sys
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+if str(CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(CURRENT_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from dense_retriever import DenseRetriever
+from reranker import SoftWeightReranker
+
+
+def deduplicate_docs(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    out = []
+    for doc in docs:
+        doc_id = str(doc.get("doc_id", "")).strip()
+        if not doc_id or doc_id in seen:
+            continue
+        seen.add(doc_id)
+        out.append(doc)
+    return out
+
+
+def build_bm25(corpus_df: pd.DataFrame) -> BM25Okapi:
+    tokenized = [str(x).lower().split() for x in corpus_df["content"].fillna("").tolist()]
+    return BM25Okapi(tokenized)
+
+
+def bm25_search(query: str, corpus_df: pd.DataFrame, bm25: BM25Okapi, top_k: int) -> List[Dict[str, Any]]:
+    scores = bm25.get_scores(query.lower().split())
+    top_idx = np.argsort(scores)[::-1][:top_k]
+    results: List[Dict[str, Any]] = []
+    for idx in top_idx:
+        row = corpus_df.iloc[int(idx)]
+        results.append(
+            {
+                "doc_id": str(row["doc_id"]),
+                "topic": str(row.get("topic", "")),
+                "text": str(row.get("content", "")),
+                "retrieval_score": float(scores[idx]),
+            }
+        )
+    return results
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--queries", default="data/annotations/eval_queries.csv")
+    parser.add_argument("--qa_corpus", default="data/qa_corpus_clean.csv")
+    parser.add_argument("--output", default="data/annotations/annotation_pool.csv")
+    parser.add_argument("--bm25_top_k", type=int, default=20)
+    parser.add_argument("--dense_top_k", type=int, default=20)
+    parser.add_argument("--rerank_top_k", type=int, default=20)
+    parser.add_argument("--rerank_pool_k", type=int, default=60)
+    args = parser.parse_args()
+
+    queries_path = Path(args.queries)
+    corpus_path = Path(args.qa_corpus)
+    output_path = Path(args.output)
+
+    queries_df = pd.read_csv(queries_path)
+    corpus_df = pd.read_csv(corpus_path)
+
+    required_q_cols = {"query_id", "query_text"}
+    required_c_cols = {"doc_id", "topic", "content"}
+    if not required_q_cols.issubset(set(queries_df.columns)):
+        raise ValueError(f"eval_queries.csv must contain columns: {required_q_cols}")
+    if not required_c_cols.issubset(set(corpus_df.columns)):
+        raise ValueError(f"qa_corpus_clean.csv must contain columns: {required_c_cols}")
+
+    corpus_df["doc_id"] = corpus_df["doc_id"].astype(str)
+    corpus_df["topic"] = corpus_df["topic"].fillna("").astype(str)
+    corpus_df["content"] = corpus_df["content"].fillna("").astype(str)
+
+    bm25 = build_bm25(corpus_df)
+
+    dense = None
+    try:
+        dense = DenseRetriever()
+        dense.load_index()
+    except Exception:
+        dense = None
+
+    reranker = SoftWeightReranker(w_r=0.60, w_c=0.20, w_x=0.20, w_d=0.10, cross_encoder=None)
+
+    rows: List[Dict[str, Any]] = []
+
+    for _, q_row in queries_df.iterrows():
+        query_id = str(q_row["query_id"])
+        query_text = str(q_row["query_text"])
+
+        bm25_docs = bm25_search(query_text, corpus_df, bm25, top_k=args.bm25_top_k)
+
+        dense_docs: List[Dict[str, Any]] = []
+        if dense is not None:
+            dense_docs = dense.search(query_text, top_k=args.dense_top_k)
+
+        rerank_candidates = deduplicate_docs(
+            bm25_search(query_text, corpus_df, bm25, top_k=args.rerank_pool_k)
+            + (dense.search(query_text, top_k=args.rerank_pool_k) if dense is not None else [])
+        )
+        rerank_docs = reranker.rerank(
+            query=query_text,
+            analyzer_results=None,
+            documents=rerank_candidates,
+            top_k=args.rerank_top_k,
+            enable_diversity_penalty=True,
+        )
+
+        source_map: Dict[str, set] = {}
+        doc_store: Dict[str, Dict[str, Any]] = {}
+
+        def add_source(docs: List[Dict[str, Any]], source_name: str) -> None:
+            for d in docs:
+                doc_id = str(d.get("doc_id", "")).strip()
+                if not doc_id:
+                    continue
+                source_map.setdefault(doc_id, set()).add(source_name)
+                if doc_id not in doc_store:
+                    doc_store[doc_id] = d
+
+        add_source(bm25_docs, "bm25")
+        add_source(dense_docs, "dense")
+        add_source(rerank_docs, "rerank")
+
+        for doc_id in sorted(source_map.keys()):
+            doc = doc_store.get(doc_id, {})
+            if not doc:
+                hit = corpus_df[corpus_df["doc_id"] == doc_id]
+                if not hit.empty:
+                    doc = {
+                        "doc_id": doc_id,
+                        "topic": str(hit.iloc[0]["topic"]),
+                        "text": str(hit.iloc[0]["content"]),
+                    }
+
+            rows.append(
+                {
+                    "query_id": query_id,
+                    "query_text": query_text,
+                    "doc_id": doc_id,
+                    "topic": str(doc.get("topic", "")),
+                    "text": str(doc.get("text", doc.get("content", ""))),
+                    "from_system": "|".join(sorted(source_map[doc_id])),
+                }
+            )
+
+    output_df = pd.DataFrame(rows).sort_values(by=["query_id", "doc_id"]).reset_index(drop=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_df.to_csv(output_path, index=False)
+
+    print(f"Saved annotation pool: {output_path}")
+    print(f"Total rows: {len(output_df)}")
+
+
+if __name__ == "__main__":
+    main()
