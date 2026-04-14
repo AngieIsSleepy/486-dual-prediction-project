@@ -38,7 +38,6 @@ def canonical_system_name(raw: str) -> str:
 
 
 def prepare_ndcg_long(eval_per_query: pd.DataFrame) -> pd.DataFrame:
-    # 1) long format: query_id, system, ndcg...
     q_col = find_col(eval_per_query, ["query_id", "query", "qid"])
     sys_col = find_col(eval_per_query, ["system", "model", "retriever"])
     ndcg_col = find_col(eval_per_query, ["ndcg_at_10", "ndcg@10", "nDCG@10", "ndcg10", "ndcg"])
@@ -51,7 +50,6 @@ def prepare_ndcg_long(eval_per_query: pd.DataFrame) -> pd.DataFrame:
         out = out.dropna(subset=["query_id", "system", "ndcg_at_10"])
         return out
 
-    # 2) wide format fallback: query_id + bm25_ndcg..., dense_ndcg..., rerank_ndcg...
     if not q_col:
         raise ValueError("Cannot find query_id column in eval_per_query.csv")
 

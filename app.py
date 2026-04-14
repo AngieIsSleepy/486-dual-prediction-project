@@ -27,7 +27,6 @@ try:
 except Exception:
     DenseRetriever = None
 
-# 评估脚本建议提供 run_evaluation(...) 函数
 try:
     from eval_retrieval import run_evaluation
 except Exception:
@@ -95,24 +94,38 @@ def load_reranker(
     diversity_weight: float,
 ) -> SoftWeightReranker:
     cross_encoder = load_cross_encoder(cross_encoder_name) if use_cross_encoder else None
-
-    # 兼容你当前/未来 reranker 参数签名
     init_sig = inspect.signature(SoftWeightReranker.__init__).parameters
-    kwargs: Dict[str, Any] = {
-        "alpha": alpha,
-        "gamma": gamma,
-        "cross_encoder": cross_encoder,
-    }
 
-    # 强制关闭 MBTI 影响（如果旧版本还保留 beta）
+    kwargs: Dict[str, Any] = {"cross_encoder": cross_encoder}
+
+    if "alpha" in init_sig:
+        kwargs["alpha"] = alpha
+    if "gamma" in init_sig:
+        kwargs["gamma"] = gamma
     if "beta" in init_sig:
         kwargs["beta"] = 0.0
 
+    wc = alpha
+    wx = gamma
+    wd = diversity_weight if enable_diversity_penalty else 0.0
+    wr = max(0.0, 1.0 - wc - wx)
+
+    if "w_c" in init_sig:
+        kwargs["w_c"] = wc
+    if "w_x" in init_sig:
+        kwargs["w_x"] = wx
+    if "w_d" in init_sig:
+        kwargs["w_d"] = wd
+    if "w_r" in init_sig:
+        kwargs["w_r"] = wr
+
+    if "use_embedding_diversity" in init_sig:
+        kwargs["use_embedding_diversity"] = enable_diversity_penalty
     if "enable_diversity_penalty" in init_sig:
         kwargs["enable_diversity_penalty"] = enable_diversity_penalty
     if "diversity_weight" in init_sig:
         kwargs["diversity_weight"] = diversity_weight
-    if "delta" in init_sig:  # 有些实现把去重权重叫 delta
+    if "delta" in init_sig:
         kwargs["delta"] = diversity_weight
 
     return SoftWeightReranker(**kwargs)
@@ -217,7 +230,6 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
                 st.write(f"**Retrieval score(raw):** {float(doc.get('retrieval_score', 0.0)):.4f}")
 
             if show_scoring:
-                # 解释分量（兼容新旧字段）
                 retrieval_norm = float(doc.get("retrieval_score_norm", doc.get("retrieval_score", 0.0)))
                 ce_norm = float(doc.get("cross_encoder_score_norm", doc.get("cross_encoder_score", 0.0)))
                 category_bonus = float(doc.get("category_bonus", 0.0))
@@ -331,7 +343,6 @@ with demo_tab:
         else:
             retrieved_docs = keyword_retrieve(user_input, top_k=rerank_pool_size)
 
-        # 基础去重（doc_id）
         retrieved_docs = dedupe_docs_by_doc_id(retrieved_docs)
 
         reranked_docs = run_rerank_compat(
@@ -366,7 +377,6 @@ with demo_tab:
         render_result_cards("Retrieved Candidates", retrieved_docs, show_scoring=False)
         render_result_cards("Final Reranked Results", reranked_docs, show_scoring=True)
 
-        # 导出 CSV（含解释分量）
         rerank_df = pd.DataFrame(reranked_docs)
         if not rerank_df.empty:
             st.download_button(
