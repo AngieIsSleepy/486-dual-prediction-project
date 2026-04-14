@@ -1,4 +1,4 @@
-# 486-Dual-Prediction-Project
+# Mental-state-aware retrieval/reranking
 
 A multi-stage mental health support system integrating Mental State Classification and Personality-aware Resource Retrieval.
 
@@ -15,7 +15,7 @@ A multi-stage mental health support system integrating Mental State Classificati
 * **Step C**: Dense Retrieval with FAISS & Sentence-Transformers.
 * **Step D**: System Integration, Soft-Weighting Reranker, and Streamlit UI.
 
-## 🛠️ Setup & Usage
+## Setup & Usage
 
 ### Prerequisites
 * Python 3.10+

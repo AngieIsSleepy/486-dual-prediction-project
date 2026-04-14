@@ -70,9 +70,9 @@ def load_dense_retriever() -> Optional[Any]:
 
 
 @st.cache_resource
-def load_reranker(alpha: float, beta: float, gamma: float, cross_encoder_name: str, use_cross_encoder: bool) -> SoftWeightReranker:
+def load_reranker(alpha: float, gamma: float, cross_encoder_name: str, use_cross_encoder: bool) -> SoftWeightReranker:
     cross_encoder = load_cross_encoder(cross_encoder_name) if use_cross_encoder else None
-    return SoftWeightReranker(alpha=alpha, beta=beta, gamma=gamma, cross_encoder=cross_encoder)
+    return SoftWeightReranker(alpha=alpha, gamma=gamma, cross_encoder=cross_encoder)
 
 
 @st.cache_data
@@ -110,11 +110,9 @@ def keyword_retrieve(query: str, top_k: int = 8) -> List[Dict[str, Any]]:
 
 def fallback_analyzer_result(baseline_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not baseline_result:
-        return {"mental_state_top5": [], "mbti_top5": []}
+        return {"mental_state_top5": []}
     return {
-        "mental_state_top5": baseline_result.get("top_predictions", []),
-        "mbti_top5": [],
-    }
+        "mental_state_top5": baseline_result.get("top_predictions", [])}
 
 
 def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bool = False) -> None:
@@ -135,7 +133,7 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
             if show_scoring:
                 st.write(f"**Final score:** {doc.get('final_score', 0.0):.4f}")
                 st.write(f"**Category bonus:** {doc.get('category_bonus', 0.0):.4f}")
-                st.write(f"**Personality bonus:** {doc.get('personality_bonus', 0.0):.4f}")
+                # st.write(f"**Personality bonus:** {doc.get('personality_bonus', 0.0):.4f}")
                 st.write(f"**Cross-encoder score:** {doc.get('cross_encoder_score', 0.0):.4f}")
                 if doc.get("matched_category"):
                     st.write(f"**Matched category:** {doc['matched_category']}")
@@ -156,12 +154,12 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
 
 st.set_page_config(page_title="Mental Health Support Demo", layout="wide")
 st.title("Mental Health Support System Demo")
-st.caption("Member D integration demo: QueryAnalyzer, DenseRetriever, soft-weight reranking, and optional cross-encoder reranking.")
+st.caption("Mental-state-aware retrieval demo: QueryAnalyzer, DenseRetriever, soft-weight reranking, and optional cross-encoder reranking.")
 
 with st.sidebar:
     st.header("Settings")
     alpha = st.slider("Category weight (alpha)", min_value=0.0, max_value=1.0, value=0.35, step=0.05)
-    beta = st.slider("Personality weight (beta)", min_value=0.0, max_value=0.5, value=0.10, step=0.05)
+    # beta = st.slider("Personality weight (beta)", min_value=0.0, max_value=0.5, value=0.10, step=0.05)
     use_cross_encoder = st.checkbox("Enable cross-encoder reranking", value=False)
     gamma = st.slider("Cross-encoder weight (gamma)", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
     rerank_pool_size = st.slider("Rerank candidate pool", min_value=10, max_value=100, value=30, step=10)
@@ -186,7 +184,7 @@ if st.button("Run Pipeline", type="primary"):
     baseline_predictor = load_baseline_predictor()
     analyzer = load_query_analyzer()
     dense_retriever = load_dense_retriever()
-    reranker = load_reranker(alpha, beta, gamma, cross_encoder_name, use_cross_encoder)
+    reranker = load_reranker(alpha, gamma, cross_encoder_name, use_cross_encoder)
 
     baseline_result = baseline_predictor.predict(user_input) if baseline_predictor else None
     analyzer_result = analyzer.analyze(user_input) if analyzer else fallback_analyzer_result(baseline_result)

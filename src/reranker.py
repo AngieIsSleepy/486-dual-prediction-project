@@ -26,7 +26,7 @@ class RerankedDocument:
     topic: str
     retrieval_score: float
     category_bonus: float
-    personality_bonus: float
+    # personality_bonus: float
     cross_encoder_score: float
     final_score: float
     matched_category: Optional[str]
@@ -38,7 +38,7 @@ class RerankedDocument:
             "topic": self.topic,
             "retrieval_score": self.retrieval_score,
             "category_bonus": self.category_bonus,
-            "personality_bonus": self.personality_bonus,
+            # "personality_bonus": self.personality_bonus,
             "cross_encoder_score": self.cross_encoder_score,
             "final_score": self.final_score,
             "matched_category": self.matched_category,
@@ -58,12 +58,12 @@ class SoftWeightReranker:
     def __init__(
         self,
         alpha: float = 0.35,
-        beta: float = 0.10,
+        # beta: float = 0.10,
         gamma: float = 0.0,
         cross_encoder: Optional[Any] = None,
     ) -> None:
         self.alpha = alpha
-        self.beta = beta
+        # self.beta = beta
         self.gamma = gamma
         self.cross_encoder = cross_encoder
 
@@ -75,15 +75,15 @@ class SoftWeightReranker:
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
         category_scores = self._extract_category_scores(analyzer_results)
-        personality_label = self._extract_personality(analyzer_results)
+        # personality_label = self._extract_personality(analyzer_results)
 
         reranked_docs: List[RerankedDocument] = []
         for index, doc in enumerate(documents):
             retrieval_score = float(doc.get("retrieval_score", 0.0))
             matched_category, category_probability = self._match_document_category(doc, category_scores)
             category_bonus = self.alpha * category_probability
-            personality_bonus = self.beta * self._personality_alignment(personality_label, doc)
-            cross_encoder_score = self.gamma * self._cross_encoder_score(query, personality_label, doc, index)
+            # personality_bonus = self.beta * self._personality_alignment(personality_label, doc)
+            cross_encoder_score = self.gamma * self._cross_encoder_score(query, doc, index)
 
             reranked_docs.append(
                 RerankedDocument(
@@ -92,9 +92,9 @@ class SoftWeightReranker:
                     topic=str(doc.get("topic", "")),
                     retrieval_score=retrieval_score,
                     category_bonus=category_bonus,
-                    personality_bonus=personality_bonus,
+                    # personality_bonus=personality_bonus,
                     cross_encoder_score=cross_encoder_score,
-                    final_score=retrieval_score + category_bonus + personality_bonus + cross_encoder_score,
+                    final_score=retrieval_score + category_bonus + cross_encoder_score,
                     matched_category=matched_category,
                 )
             )
@@ -120,19 +120,19 @@ class SoftWeightReranker:
 
         return {}
 
-    def _extract_personality(self, analyzer_results: Optional[Dict[str, Any]]) -> Optional[str]:
-        if not analyzer_results:
-            return None
+    # def _extract_personality(self, analyzer_results: Optional[Dict[str, Any]]) -> Optional[str]:
+    #     if not analyzer_results:
+    #         return None
 
-        mbti_top5 = analyzer_results.get("mbti_top5", [])
-        if mbti_top5:
-            return str(mbti_top5[0].get("label"))
+    #     mbti_top5 = analyzer_results.get("mbti_top5", [])
+    #     if mbti_top5:
+    #         return str(mbti_top5[0].get("label"))
 
-        personality = analyzer_results.get("personality")
-        if isinstance(personality, str):
-            return personality
+    #     personality = analyzer_results.get("personality")
+    #     if isinstance(personality, str):
+    #         return personality
 
-        return None
+    #     return None
 
     def _match_document_category(
         self,
@@ -161,25 +161,25 @@ class SoftWeightReranker:
 
         return best_category, best_probability
 
-    def _personality_alignment(self, personality_label: Optional[str], document: Dict[str, Any]) -> float:
-        if not personality_label:
-            return 0.0
-        user_mbti = personality_label.upper()
-        text_upper = str(document.get("text") or document.get("content") or "").upper()
-        doc_mbti_list = []
-        if "mbti_top5" in document:
-            doc_mbti_list = [str(item.get("label", "")).upper() for item in document["mbti_top5"]]
-            if user_mbti in doc_mbti_list:
-                return 1.0
+    # def _personality_alignment(self, personality_label: Optional[str], document: Dict[str, Any]) -> float:
+    #     if not personality_label:
+    #         return 0.0
+    #     user_mbti = personality_label.upper()
+    #     text_upper = str(document.get("text") or document.get("content") or "").upper()
+    #     doc_mbti_list = []
+    #     if "mbti_top5" in document:
+    #         doc_mbti_list = [str(item.get("label", "")).upper() for item in document["mbti_top5"]]
+    #         if user_mbti in doc_mbti_list:
+    #             return 1.0
             
-        if f'"LABEL":"{user_mbti}"' in text_upper or f"'LABEL':'{user_mbti}'" in text_upper or f'"LABEL": "{user_mbti}"' in text_upper:
-            return 1.0
-        return 0.0
+    #     if f'"LABEL":"{user_mbti}"' in text_upper or f"'LABEL':'{user_mbti}'" in text_upper or f'"LABEL": "{user_mbti}"' in text_upper:
+    #         return 1.0
+    #     return 0.0
 
     def _cross_encoder_score(
         self,
         query: str,
-        personality_label: Optional[str],
+        # personality_label: Optional[str],
         document: Dict[str, Any],
         index: int,
     ) -> float:
@@ -187,10 +187,10 @@ class SoftWeightReranker:
             return 0.0
 
         if hasattr(self.cross_encoder, "score"):
-            return float(self.cross_encoder.score(query, personality_label, document))
+            return float(self.cross_encoder.score(query, document))
 
         if callable(self.cross_encoder):
-            return float(self.cross_encoder(query, personality_label, document, index))
+            return float(self.cross_encoder(query, document, index))
 
         return 0.0
 
@@ -215,14 +215,14 @@ class CrossEncoderScorer:
     def score(
         self,
         query: str,
-        personality_label: Optional[str],
+        # personality_label: Optional[str],
         document: Dict[str, Any],
     ) -> float:
-        personality_text = ""
-        if personality_label:
-            personality_text = f" Personality style: {personality_label}."
+        # personality_text = ""
+        # if personality_label:
+        #     personality_text = f" Personality style: {personality_label}."
 
-        pair_query = f"User query: {query}.{personality_text}"
+        pair_query = f"User query: {query}"
         document_text = str(document.get("text") or document.get("content") or "")
         score = self.model.predict([(pair_query, document_text)], convert_to_numpy=True)[0]
         return float(score)

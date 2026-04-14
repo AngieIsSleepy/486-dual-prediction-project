@@ -15,10 +15,10 @@ class MentalHealthDataLoader:
         path = os.path.join(self.data_dir, "qa_corpus_clean.csv")
         return pd.read_csv(path)
 
-    def load_mbti_data(self):
-        """Returns the MBTI posts for personality prediction"""
-        path = os.path.join(self.data_dir, "mbti_clean.csv")
-        return pd.read_csv(path)
+    # def load_mbti_data(self):
+    #     """Returns the MBTI posts for personality prediction"""
+    #     path = os.path.join(self.data_dir, "mbti_clean.csv")
+    #     return pd.read_csv(path)
 
 # loader = MentalHealthDataLoader()
 # df = loader.load_classification_data()
