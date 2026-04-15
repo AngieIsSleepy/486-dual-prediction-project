@@ -11,7 +11,7 @@ except Exception:
     CrossEncoder = None
     SentenceTransformer = None
 
-
+# Keyword map used to connect analyzer mental-state categories to document text/topic
 MENTAL_CATEGORY_KEYWORDS = {
     "Anxiety-like": ["anxiety", "stress", "panic", "worry", "burnout"],
     "Depressive/Low Mood": ["depression", "sad", "hopeless", "low mood", "lonely"],
@@ -23,6 +23,7 @@ MENTAL_CATEGORY_KEYWORDS = {
 
 
 def minmax_normalize(values: List[float]) -> List[float]:
+    """Apply min-max normalization to a score list."""
     if not values:
         return []
     min_v = min(values)
@@ -33,6 +34,7 @@ def minmax_normalize(values: List[float]) -> List[float]:
 
 @dataclass
 class RerankedDocument:
+    """Container for reranked document fields and score components."""
     doc_id: str
     text: str
     topic: str
@@ -47,6 +49,7 @@ class RerankedDocument:
     matched_category: Optional[str]
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert dataclass object to standard dict output."""
         return {
             "doc_id": self.doc_id,
             "text": self.text,
@@ -101,10 +104,11 @@ class SoftWeightReranker:
         top_k: int = 10,
         enable_diversity_penalty: bool = True,
     ) -> List[Dict[str, Any]]:
+        """Rerank candidate documents and return top-k results."""
         docs = list(documents)
         if not docs:
             return []
-
+        # Parse mental-state category scores from analyzer output
         category_scores = self._extract_category_scores(analyzer_results)
 
         retrieval_raw = [float(doc.get("retrieval_score", 0.0)) for doc in docs]
@@ -112,7 +116,7 @@ class SoftWeightReranker:
 
         retrieval_norm = minmax_normalize(retrieval_raw)
         cross_norm = minmax_normalize(cross_raw)
-
+        # Build unified candidate objects with all score components
         candidates: List[Dict[str, Any]] = []
         for i, doc in enumerate(docs):
             matched_category, category_probability = self._match_document_category(doc, category_scores)
@@ -132,7 +136,7 @@ class SoftWeightReranker:
                     "matched_category": matched_category,
                 }
             )
-
+        # Precompute candidate embeddings for diversity checks
         embedding_map: Dict[str, np.ndarray] = {}
         if enable_diversity_penalty and self.diversity_encoder is not None:
             texts = [c["text"] for c in candidates]
@@ -144,7 +148,7 @@ class SoftWeightReranker:
             )
             for c, emb in zip(candidates, embs):
                 embedding_map[c["doc_id"]] = emb
-
+         # Greedy selection: pick one doc at a time using current diversity context
         selected: List[Dict[str, Any]] = []
         remaining = candidates.copy()
         k = min(top_k, len(remaining))
@@ -175,7 +179,7 @@ class SoftWeightReranker:
             chosen["diversity_penalty"] = best_penalty
             chosen["final_score"] = best_score
             selected.append(chosen)
-
+        # Convert selected dicts into structured output
         result_docs: List[RerankedDocument] = []
         for item in selected:
             result_docs.append(
@@ -197,6 +201,7 @@ class SoftWeightReranker:
         return [d.to_dict() for d in result_docs]
 
     def _extract_category_scores(self, analyzer_results: Optional[Dict[str, Any]]) -> Dict[str, float]:
+        """Extract category->score map from analyzer output formats."""
         if not analyzer_results:
             return {}
 
@@ -216,6 +221,7 @@ class SoftWeightReranker:
         document: Dict[str, Any],
         category_scores: Dict[str, float],
     ) -> Tuple[Optional[str], float]:
+        """Match a document to the best mental category and return its probability bonus."""
         if not category_scores:
             return None, 0.0
 
@@ -239,6 +245,7 @@ class SoftWeightReranker:
         return best_category, float(best_probability)
 
     def _cross_encoder_score(self, query: str, document: Dict[str, Any]) -> float:
+        """Compute cross-encoder relevance score with compatibility fallbacks."""
         if self.cross_encoder is None:
             return 0.0
 
@@ -263,6 +270,7 @@ class SoftWeightReranker:
         selected: List[Dict[str, Any]],
         embedding_map: Dict[str, np.ndarray],
     ) -> float:
+        """Estimate similarity penalty between candidate and already selected docs."""
         if not selected:
             return 0.0
 
@@ -307,6 +315,7 @@ class SoftWeightReranker:
 
 
 class CrossEncoderScorer:
+    """Wrapper for sentence-transformers CrossEncoder scoring."""
     def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> None:
         if CrossEncoder is None:
             raise ImportError(
@@ -317,6 +326,7 @@ class CrossEncoderScorer:
         self.model = CrossEncoder(model_name)
 
     def score(self, query: str, document: Dict[str, Any]) -> float:
+        """Score a (query, document) pair using the cross-encoder model."""
         pair_query = f"User query: {query}"
         document_text = str(document.get("text") or document.get("content") or "")
         score = self.model.predict([(pair_query, document_text)], convert_to_numpy=True)[0]

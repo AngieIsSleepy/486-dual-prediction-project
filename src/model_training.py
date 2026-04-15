@@ -8,6 +8,10 @@ from datasets import Dataset
 os.makedirs("models", exist_ok=True)
 
 def train_mental_state_model():
+    """
+    Train a DistilBERT classifier 
+    for coarse mental-state categories and save artifacts.
+    """
     print("=== Start Training for Mental State ===")
     
 
@@ -17,30 +21,30 @@ def train_mental_state_model():
         return
     df = pd.read_csv(data_path).dropna(subset=['text', 'coarse_label'])
     
-    # (String -> Integer)
+    # Build label mappings (string labels <-> integer IDs)
     labels = df['coarse_label'].unique().tolist()
     label2id = {label: i for i, label in enumerate(labels)}
     id2label = {i: label for i, label in enumerate(labels)}
     df['label'] = df['coarse_label'].map(label2id)
-    
+    # Convert to Hugging Face Dataset and split train/test
     hg_dataset = Dataset.from_pandas(df[['text', 'label']])
     hg_dataset = hg_dataset.train_test_split(test_size=0.2, seed=42)
     
     model_name = "distilbert-base-uncased"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
+    # Tokenize text with fixed max length for baseline stability
     def tokenize_function(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
     
     tokenized_datasets = hg_dataset.map(tokenize_function, batched=True)
-    
+    # Initialize sequence classification model with label metadata
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name, 
         num_labels=len(labels),
         id2label=id2label,
         label2id=label2id
     )
-    
+    # Define core training/evaluation/checkpoint settings
     training_args = TrainingArguments(
         output_dir="./results_mental",
         eval_strategy="epoch", 
@@ -68,6 +72,4 @@ def train_mental_state_model():
 
 
 if __name__ == "__main__":
-
     train_mental_state_model()
-    # train_personality_model()

@@ -13,6 +13,7 @@ import sys
 
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
+# Ensure local modules can be imported when running this script directly
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 if str(PROJECT_ROOT) not in sys.path:
@@ -23,6 +24,7 @@ from reranker import SoftWeightReranker
 
 
 def deduplicate_docs(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove duplicate documents by doc_id while preserving order."""
     seen = set()
     out = []
     for d in docs:
@@ -35,11 +37,13 @@ def deduplicate_docs(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def build_bm25(corpus_df: pd.DataFrame) -> BM25Okapi:
+    """Build a BM25 retriever from corpus content."""
     tokenized = [str(x).lower().split() for x in corpus_df["content"].fillna("").tolist()]
     return BM25Okapi(tokenized)
 
 
 def bm25_search(query: str, corpus_df: pd.DataFrame, bm25: BM25Okapi, top_k: int) -> List[Dict[str, Any]]:
+    """Run BM25 search and return top-k documents with scores."""
     scores = bm25.get_scores(query.lower().split())
     top_idx = np.argsort(scores)[::-1][:top_k]
     out: List[Dict[str, Any]] = []
@@ -57,6 +61,7 @@ def bm25_search(query: str, corpus_df: pd.DataFrame, bm25: BM25Okapi, top_k: int
 
 
 def precision_at_k(binary_rels: List[int], k: int) -> float:
+    """Compute Precision@k from binary relevance labels."""
     top = binary_rels[:k]
     if k == 0:
         return 0.0
@@ -64,12 +69,14 @@ def precision_at_k(binary_rels: List[int], k: int) -> float:
 
 
 def recall_at_k(binary_rels: List[int], total_relevant: int, k: int) -> float:
+    """Compute Recall@k using total number of relevant documents."""
     if total_relevant <= 0:
         return 0.0
     return float(sum(binary_rels[:k]) / total_relevant)
 
 
 def mrr_at_k(binary_rels: List[int], k: int) -> float:
+    """Compute MRR@k (reciprocal rank of first relevant hit)."""
     for i, rel in enumerate(binary_rels[:k], start=1):
         if rel > 0:
             return 1.0 / i
@@ -77,6 +84,7 @@ def mrr_at_k(binary_rels: List[int], k: int) -> float:
 
 
 def dcg_at_k(graded_rels: List[int], k: int) -> float:
+    """Compute DCG@k for graded relevance."""
     score = 0.0
     for i, rel in enumerate(graded_rels[:k], start=1):
         score += (2**rel - 1) / math.log2(i + 1)
@@ -84,6 +92,7 @@ def dcg_at_k(graded_rels: List[int], k: int) -> float:
 
 
 def ndcg_at_k(graded_rels: List[int], ideal_graded_rels: List[int], k: int) -> float:
+    """Compute nDCG@k by normalizing DCG with ideal DCG."""
     dcg = dcg_at_k(graded_rels, k)
     idcg = dcg_at_k(sorted(ideal_graded_rels, reverse=True), k)
     if idcg <= 1e-12:
@@ -92,6 +101,7 @@ def ndcg_at_k(graded_rels: List[int], ideal_graded_rels: List[int], k: int) -> f
 
 
 def ap_at_k(binary_rels: List[int], total_relevant: int, k: int) -> float:
+    """Compute AP@k (average precision at cutoff k)."""
     if total_relevant <= 0:
         return 0.0
     hit_count = 0
@@ -114,6 +124,7 @@ def run_evaluation(
     metrics_cutoff: int = 10,
     enable_diversity_penalty: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Evaluate BM25, Dense, and Reranker systems and save per-query + summary metrics."""
     eval_df = pd.read_csv(eval_queries_path)
     qrels_df = pd.read_csv(qrels_path)
     corpus_df = pd.read_csv(qa_corpus_path)
@@ -128,7 +139,7 @@ def run_evaluation(
         raise ValueError(f"qrels must contain: {required_qrels}")
     if not required_corpus.issubset(set(corpus_df.columns)):
         raise ValueError(f"qa corpus must contain: {required_corpus}")
-
+    # Normalize types for stable matching/join behavior
     eval_df["query_id"] = eval_df["query_id"].astype(str)
     eval_df["query_text"] = eval_df["query_text"].astype(str)
 
@@ -139,7 +150,7 @@ def run_evaluation(
     corpus_df["doc_id"] = corpus_df["doc_id"].astype(str)
     corpus_df["topic"] = corpus_df["topic"].fillna("").astype(str)
     corpus_df["content"] = corpus_df["content"].fillna("").astype(str)
-
+    # Keep max relevance if duplicate (query_id, doc_id) entries exist
     qrels_df = qrels_df.groupby(["query_id", "doc_id"], as_index=False)["rel"].max()
 
     qrels_map: Dict[str, Dict[str, int]] = {}
@@ -147,7 +158,7 @@ def run_evaluation(
         qrels_map.setdefault(row["query_id"], {})[row["doc_id"]] = int(row["rel"])
 
     bm25 = build_bm25(corpus_df)
-
+    # Dense retriever is optional; evaluation still runs if index is unavailable
     dense = None
     try:
         dense = DenseRetriever()
@@ -158,14 +169,14 @@ def run_evaluation(
     reranker = SoftWeightReranker(w_r=0.60, w_c=0.20, w_x=0.20, w_d=0.10, cross_encoder=None)
 
     rows: List[Dict[str, Any]] = []
-
+    # Evaluate each query across all systems
     for _, q_row in eval_df.iterrows():
         qid = q_row["query_id"]
         query = q_row["query_text"]
 
         bm25_docs = bm25_search(query, corpus_df, bm25, top_k=max(bm25_top_k, metrics_cutoff))
         dense_docs = dense.search(query, top_k=max(dense_top_k, metrics_cutoff)) if dense is not None else []
-
+        # Merge BM25 + Dense candidates, then rerank
         rerank_candidates = deduplicate_docs(
             bm25_search(query, corpus_df, bm25, top_k=max(bm25_top_k, 50))
             + (dense.search(query, top_k=max(dense_top_k, 50)) if dense is not None else [])
@@ -231,6 +242,7 @@ def run_evaluation(
 
 
 def main() -> None:
+    """Parse CLI args and run retrieval evaluation."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval_queries", default="data/annotations/eval_queries.csv")
     parser.add_argument("--qrels", default="data/annotations/retrieval_qrels_final.csv")

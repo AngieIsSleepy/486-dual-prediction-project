@@ -27,15 +27,9 @@ try:
 except Exception:
     DenseRetriever = None
 
-try:
-    from eval_retrieval import run_evaluation
-except Exception:
-    run_evaluation = None
 
 
 DATA_PATH = PROJECT_ROOT / "data" / "qa_corpus_clean.csv"
-ANNOTATION_DIR = PROJECT_ROOT / "data" / "annotations"
-ARTIFACT_DIR = PROJECT_ROOT / "artifacts"
 
 CRISIS_KEYWORDS = {
     "suicide", "kill myself", "self-harm", "self harm", "overdose",
@@ -45,6 +39,7 @@ CRISIS_KEYWORDS = {
 
 @st.cache_resource
 def load_baseline_predictor() -> Optional[BaselinePredictor]:
+    """Load baseline classifier artifacts once and cache them."""
     try:
         return BaselinePredictor(
             model_path=str(PROJECT_ROOT / "baselines" / "lr_model.joblib"),
@@ -56,6 +51,7 @@ def load_baseline_predictor() -> Optional[BaselinePredictor]:
 
 @st.cache_resource
 def load_query_analyzer() -> Optional[Any]:
+    """Load deep query analyzer if available."""
     if QueryAnalyzer is None:
         return None
     try:
@@ -66,6 +62,7 @@ def load_query_analyzer() -> Optional[Any]:
 
 @st.cache_resource
 def load_cross_encoder(model_name: str) -> Optional[CrossEncoderScorer]:
+    """Load cross-encoder reranking scorer."""
     try:
         return CrossEncoderScorer(model_name=model_name)
     except Exception:
@@ -74,6 +71,7 @@ def load_cross_encoder(model_name: str) -> Optional[CrossEncoderScorer]:
 
 @st.cache_resource
 def load_dense_retriever() -> Optional[Any]:
+    """Load dense retriever and prebuilt FAISS index."""
     if DenseRetriever is None:
         return None
     try:
@@ -93,18 +91,19 @@ def load_reranker(
     enable_diversity_penalty: bool,
     diversity_weight: float,
 ) -> SoftWeightReranker:
+    """Create reranker with compatibility for different constructor signatures."""
     cross_encoder = load_cross_encoder(cross_encoder_name) if use_cross_encoder else None
     init_sig = inspect.signature(SoftWeightReranker.__init__).parameters
 
     kwargs: Dict[str, Any] = {"cross_encoder": cross_encoder}
-
+    # Backward compatibility for old parameter names
     if "alpha" in init_sig:
         kwargs["alpha"] = alpha
     if "gamma" in init_sig:
         kwargs["gamma"] = gamma
     if "beta" in init_sig:
         kwargs["beta"] = 0.0
-
+    # Convert UI controls into weighted scoring components
     wc = alpha
     wx = gamma
     wd = diversity_weight if enable_diversity_penalty else 0.0
@@ -133,12 +132,14 @@ def load_reranker(
 
 @st.cache_data
 def load_qa_corpus() -> pd.DataFrame:
+    """Load QA corpus from CSV for retrieval and display."""
     if not DATA_PATH.exists():
         return pd.DataFrame(columns=["doc_id", "topic", "content"])
     return pd.read_csv(DATA_PATH)
 
 
 def keyword_retrieve(query: str, top_k: int = 8) -> List[Dict[str, Any]]:
+    """Simple keyword-overlap fallback retriever."""
     df = load_qa_corpus()
     if df.empty:
         return []
@@ -165,17 +166,20 @@ def keyword_retrieve(query: str, top_k: int = 8) -> List[Dict[str, Any]]:
 
 
 def fallback_analyzer_result(baseline_result: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Convert baseline classifier output into analyzer-like structure."""
     if not baseline_result:
         return {"mental_state_top5": []}
     return {"mental_state_top5": baseline_result.get("top_predictions", [])}
 
 
 def is_crisis_query(text: str) -> bool:
+    """Detect obvious crisis-related wording for safety warning."""
     t = text.lower().strip()
     return any(k in t for k in CRISIS_KEYWORDS)
 
 
 def dedupe_docs_by_doc_id(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove duplicate documents by doc_id while preserving order."""
     seen = set()
     deduped = []
     for doc in docs:
@@ -196,6 +200,7 @@ def run_rerank_compat(
     enable_diversity_penalty: bool,
     diversity_weight: float,
 ) -> List[Dict[str, Any]]:
+    """Run reranking with signature compatibility across reranker versions."""
     rerank_sig = inspect.signature(reranker.rerank).parameters
     kwargs: Dict[str, Any] = {
         "query": query,
@@ -215,6 +220,7 @@ def run_rerank_compat(
 
 
 def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bool = False) -> None:
+    """Render retrieval/reranking results in Streamlit expandable cards."""
     st.subheader(title)
     if not docs:
         st.info("No results to display yet.")
@@ -228,7 +234,7 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
             st.write(f"**Doc ID:** {doc.get('doc_id', '')}")
             if "retrieval_score" in doc:
                 st.write(f"**Retrieval score(raw):** {float(doc.get('retrieval_score', 0.0)):.4f}")
-
+            # Show explainability terms for reranked outputs
             if show_scoring:
                 retrieval_norm = float(doc.get("retrieval_score_norm", doc.get("retrieval_score", 0.0)))
                 ce_norm = float(doc.get("cross_encoder_score_norm", doc.get("cross_encoder_score", 0.0)))
@@ -245,7 +251,7 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
 
                 if doc.get("matched_category"):
                     st.write(f"**Matched category:** {doc['matched_category']}")
-
+            # Prefer showing original QA pair if present in corpus
             doc_id = str(doc.get("doc_id", ""))
             matched_row = df_corpus[df_corpus["doc_id"].astype(str) == doc_id] if not df_corpus.empty else pd.DataFrame()
             if not matched_row.empty and "question" in matched_row.columns and "answer" in matched_row.columns:
@@ -258,28 +264,16 @@ def render_result_cards(title: str, docs: List[Dict[str, Any]], show_scoring: bo
                 st.info(f"**Community Advice for reference:**\n\n{raw_text}")
 
 
-def resolve_eval_file(uploaded_file: Any, default_path: Path, save_name: str) -> Optional[Path]:
-    if uploaded_file is not None:
-        upload_dir = ARTIFACT_DIR / "uploads"
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        save_path = upload_dir / save_name
-        save_path.write_bytes(uploaded_file.getbuffer())
-        return save_path
-    if default_path.exists():
-        return default_path
-    return None
-
 
 st.set_page_config(page_title="Mental Health Support Demo", layout="wide")
 st.title("Mental Health Support System Demo")
 st.caption(
     "Mental-state-aware retrieval demo with explainability, diversity penalty, "
-    "evaluation mode, safety warning, and CSV export."
 )
 
 with st.sidebar:
     st.header("Settings")
-
+    # Reranking controls
     alpha = st.slider("Category weight (alpha)", min_value=0.0, max_value=1.0, value=0.35, step=0.05)
     use_cross_encoder = st.checkbox("Enable cross-encoder reranking", value=False)
     gamma = st.slider("Cross-encoder weight (gamma)", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
@@ -296,7 +290,7 @@ with st.sidebar:
         disabled=not use_cross_encoder,
     )
 
-demo_tab, eval_tab = st.tabs(["Interactive Demo", "Evaluation"])
+demo_tab = st.tabs(["Interactive Demo"])[0]
 
 with demo_tab:
     user_input = st.text_area(
@@ -305,7 +299,7 @@ with demo_tab:
         height=140,
         key="demo_query_input",
     )
-
+    # Show immediate safety warning for crisis-like input
     if user_input.strip() and is_crisis_query(user_input):
         st.error(
             "⚠️ Crisis signal detected. If you are in immediate danger, call local emergency services now. "
@@ -317,7 +311,7 @@ with demo_tab:
         if not user_input.strip():
             st.warning("Please enter a query first.")
             st.stop()
-
+        # Load all pipeline components
         baseline_predictor = load_baseline_predictor()
         analyzer = load_query_analyzer()
         dense_retriever = load_dense_retriever()
@@ -329,7 +323,7 @@ with demo_tab:
             enable_diversity_penalty=enable_diversity_penalty,
             diversity_weight=diversity_weight,
         )
-
+        # Mental-state analysis (analyzer first, fallback to baseline)
         baseline_result = baseline_predictor.predict(user_input) if baseline_predictor else None
         analyzer_result = analyzer.analyze(user_input) if analyzer else fallback_analyzer_result(baseline_result)
 
@@ -399,63 +393,6 @@ with demo_tab:
                 "diversity_weight": diversity_weight,
             }
         )
-
-with eval_tab:
-    st.subheader("Retrieval Evaluation")
-
-    default_eval_queries = ANNOTATION_DIR / "eval_queries.csv"
-    default_qrels_final = ANNOTATION_DIR / "retrieval_qrels_final.csv"
-
-    up_eval_queries = st.file_uploader("Upload eval_queries.csv (optional)", type=["csv"], key="up_eval_queries")
-    up_qrels = st.file_uploader("Upload retrieval_qrels_final.csv (optional)", type=["csv"], key="up_qrels")
-
-    st.caption(f"Default eval_queries path: {default_eval_queries}")
-    st.caption(f"Default qrels path: {default_qrels_final}")
-
-    if st.button("Run Evaluation", type="primary", key="run_eval_button"):
-        eval_queries_path = resolve_eval_file(up_eval_queries, default_eval_queries, "eval_queries_uploaded.csv")
-        qrels_path = resolve_eval_file(up_qrels, default_qrels_final, "qrels_uploaded.csv")
-
-        if eval_queries_path is None or qrels_path is None:
-            st.error("Missing eval inputs. Please upload files or place defaults in data/annotations/.")
-        elif run_evaluation is None:
-            st.error(
-                "Cannot import run_evaluation from src/eval_retrieval.py. "
-                "Please implement it first, then rerun."
-            )
-        else:
-            try:
-                summary_df, per_query_df = run_evaluation(
-                    eval_queries_path=str(eval_queries_path),
-                    qrels_path=str(qrels_path),
-                    output_dir=str(ARTIFACT_DIR),
-                )
-
-                st.success("Evaluation finished.")
-
-                preferred_cols = ["system", "nDCG@10", "MRR@10", "P@5", "Recall@10", "MAP"]
-                show_cols = [c for c in preferred_cols if c in summary_df.columns]
-                st.dataframe(summary_df[show_cols] if show_cols else summary_df, use_container_width=True)
-
-                st.markdown("**Per-query details**")
-                st.dataframe(per_query_df, use_container_width=True)
-
-                st.download_button(
-                    "Download eval_summary.csv",
-                    summary_df.to_csv(index=False).encode("utf-8"),
-                    file_name="eval_summary.csv",
-                    mime="text/csv",
-                    key="download_eval_summary",
-                )
-                st.download_button(
-                    "Download eval_per_query.csv",
-                    per_query_df.to_csv(index=False).encode("utf-8"),
-                    file_name="eval_per_query.csv",
-                    mime="text/csv",
-                    key="download_eval_per_query",
-                )
-            except Exception as e:
-                st.exception(e)
 
 st.markdown(
     """

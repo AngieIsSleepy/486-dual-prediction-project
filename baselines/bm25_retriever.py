@@ -2,7 +2,7 @@ import pandas as pd
 from rank_bm25 import BM25Okapi
 import os
 
-# 1. Load cleaned QA corpus
+# Load the cleaned QA corpus produced by preprocessing
 data_path = "data/qa_corpus_clean.csv"
 if not os.path.exists(data_path):
     print(f"Error: {data_path} not found. Please run src/preprocessing.py first.")
@@ -10,7 +10,7 @@ if not os.path.exists(data_path):
 
 df_qa = pd.read_csv(data_path)
 
-# 2. Tokenization (Simple whitespace split for baseline)
+# Baseline tokenization: split each document by whitespace
 tokenized_corpus = [str(doc).split(" ") for doc in df_qa['content'].tolist()]
 bm25 = BM25Okapi(tokenized_corpus)
 
@@ -20,7 +20,7 @@ def search(query, k=5):
     results = bm25.get_top_n(tokenized_query, df_qa['content'].tolist(), n=k)
     return results
 
-# 3. Test
+# Quick local test
 if __name__ == "__main__":
     test_query = "how to deal with work stress and burnout"
     print(f"\nQuery: {test_query}")

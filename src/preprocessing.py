@@ -4,7 +4,7 @@ import os
 from datasets import load_dataset
 from tqdm import tqdm
 
-# 1. Define label mapping (Based on Proposal 3.4)
+# Map fine-grained subreddit labels to coarse categories
 COARSE_MAP = {
     'anxiety': 'Anxiety-like',
     'socialanxiety': 'Anxiety-like',
@@ -24,21 +24,22 @@ def clean_text(text):
     """Basic text cleaning: remove URLs, line breaks, and extra spaces"""
     if not isinstance(text, str): 
         return ""
-    # Remove URLs
     text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-    # Remove Reddit usernames and subreddits
     text = re.sub(r'u/\w+|r/\w+', '', text)
-    # Remove line breaks and normalize whitespace
     text = text.replace('\n', ' ').replace('\r', ' ')
     text = re.sub(r'\s+', ' ', text).strip()
     return text.lower()
 
 def process_mental_health_data():
+    """
+    Load Reddit classification data, map labels, 
+    clean text, stratified-sample, and export CSV.
+    """
     print("--- Processing Reddit Classification Data ---")
     ds = load_dataset("kamruzzaman-asif/reddit-mental-health-classification")
     df = pd.DataFrame(ds['train'])
     
-    # Map labels and filter missing values
+    # Keep only rows that can be mapped to coarse labels
     df['coarse_label'] = df['label'].map(COARSE_MAP)
     df = df.dropna(subset=['coarse_label'])
     
@@ -47,11 +48,10 @@ def process_mental_health_data():
     # Filter out texts shorter than 20 characters
     df = df[df['text'].str.len() > 20]
     
-    # --- Robust Stratified Sampling Logic ---
+    # Stratified sampling with a per-class cap
     print("Performing stratified sampling...")
     sampled_groups = []
     for label, group in df.groupby('coarse_label'):
-        # Ensure each category has no more than 8000 samples
         n_samples = min(len(group), 8000)
         sampled_groups.append(group.sample(n=n_samples, random_state=42))
     
@@ -63,45 +63,28 @@ def process_mental_health_data():
     print(f"Done! Exported to: {output} (Total samples: {len(df_sampled)})")
 
 def process_qa_data():
+    """
+    Load QA data, clean question/answer fields, 
+    build retrieval content, and export CSV.
+    """
     print("\n--- Processing QA Retrieval Data ---")
     ds = load_dataset("Srishmath/mental-health-qa-bot-dataset")
     df = pd.DataFrame(ds['train'])
     df['question'] = df['input'].apply(clean_text)
     df['answer'] = df['response'].apply(clean_text)
 
-    # Construct unified document field: topic + input + response
+    # Build a unified retrieval text field
     df['content'] = df['topic'] + " " + df['question'] + " " + df['answer']
     
-    # Generate unique IDs for tracking by members C and D
+    # Generate unique IDs for downstream tracking
     df['doc_id'] = [f"qa_{i}" for i in range(len(df))]
     
     output = "data/qa_corpus_clean.csv"
     df[['doc_id', 'topic', 'question', 'answer', 'content']].to_csv(output, index=False)
     print(f"Done! QA corpus exported to: {output}")
 
-def process_mbti_data():
-    print("\n--- Processing MBTI Data ---")
-    try:
-        ds = load_dataset("Shunian/kaggle-mbti-cleaned-augmented")
-        df = pd.DataFrame(ds['train'])
-        
-        # Unify column names: rename 'posts' to 'text' if it exists
-        if 'posts' in df.columns:
-            df = df.rename(columns={'posts': 'text'})
-        
-        df['text'] = df['text'].apply(clean_text)
-        
-        # Sample 5000 records for the baseline
-        df_sampled = df.sample(n=min(len(df), 5000), random_state=42)
-        
-        output = "data/mbti_clean.csv"
-        df_sampled.to_csv(output, index=False)
-        print(f"Done! MBTI data exported to: {output}")
-    except Exception as e:
-        print(f"MBTI processing failed: {e}")
 
 if __name__ == "__main__":
     process_mental_health_data()
     process_qa_data()
-    process_mbti_data()
     print("\nData preprocessing completed! CSVs are ready for the team.")

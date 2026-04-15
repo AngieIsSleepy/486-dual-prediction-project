@@ -1,6 +1,6 @@
 import os
 
-# ---------- Stability settings ----------
+# Stability settings
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -19,14 +19,7 @@ from sentence_transformers import SentenceTransformer
 
 class DenseRetriever:
     """
-    Member C: Dense Retrieval Engineer
-
-    Responsibilities:
-    1. Load cleaned QA corpus from data/qa_corpus_clean.csv
-    2. Encode all QA texts into dense vectors using sentence-transformers
-    3. Build a FAISS index
-    4. Retrieve Top-K / Top-100 documents for a user query
-
+    Build/load a FAISS dense index and retrieve top-K QA documents.
     Input:
         query: str
 
@@ -44,6 +37,7 @@ class DenseRetriever:
         artifacts_dir: str = "artifacts",
         embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     ):
+        # Paths for input corpus and saved retrieval artifacts
         self.data_path = data_path
         self.artifacts_dir = artifacts_dir
         self.index_path = os.path.join(artifacts_dir, "qa_dense.index")
@@ -57,7 +51,7 @@ class DenseRetriever:
 
         print(f"Loading embedding model: {embedding_model_name}")
         print(f"Using device: {self.device}")
-
+        # Sentence encoder used for both corpus and query embeddings
         self.embedding_model = SentenceTransformer(
             embedding_model_name,
             device=self.device
@@ -78,7 +72,7 @@ class DenseRetriever:
         missing = required_cols - set(df.columns)
         if missing:
             raise ValueError(f"Missing required columns in QA corpus: {missing}")
-
+        # Normalize column types and fill missing values
         df["doc_id"] = df["doc_id"].astype(str)
         df["topic"] = df["topic"].fillna("").astype(str)
         df["content"] = df["content"].fillna("").astype(str)
@@ -117,6 +111,7 @@ class DenseRetriever:
         return embeddings
 
     def build_index(self, batch_size: int = 4) -> None:
+        """Encode corpus, build FAISS index, and save index + metadata."""
         df = self.load_corpus()
         texts = df["content"].tolist()
 
@@ -143,6 +138,7 @@ class DenseRetriever:
         print(f"Metadata saved to: {self.metadata_path}")
 
     def load_index(self) -> None:
+        """Load saved FAISS index and document metadata from disk."""
         if not os.path.exists(self.index_path):
             raise FileNotFoundError(
                 f"{self.index_path} not found. Please run src/build_dense_index.py first."
@@ -166,7 +162,7 @@ class DenseRetriever:
         query = str(query).strip()
         if not query:
             return []
-
+        # Encode query with the same normalization as corpus vectors
         query_embedding = self.embedding_model.encode(
             [query],
             batch_size=1,
@@ -196,7 +192,7 @@ class DenseRetriever:
 
     def search_top100(self, query: str) -> List[Dict]:
         """
-        Return Top-100 recall results for downstream reranking by Member D.
+        Return Top-100 recall results for downstream reranking.
         """
         return self.search(query=query, top_k=100)
 

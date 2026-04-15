@@ -9,6 +9,7 @@ from sklearn.metrics import cohen_kappa_score
 
 
 def main() -> None:
+    """Compute inter-annotator agreement metrics and export summary + disagreements."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--qrels", default="data/annotations/retrieval_qrels.csv")
     parser.add_argument("--output_json", default="artifacts/annotation_agreement.json")

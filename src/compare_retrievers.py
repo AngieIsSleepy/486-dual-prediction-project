@@ -1,7 +1,6 @@
 import os
 import sys
 
-# Add project root to Python path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 if PROJECT_ROOT not in sys.path:
@@ -12,6 +11,7 @@ from dense_retriever import DenseRetriever
 
 
 def print_bm25_results(query: str, k: int = 5) -> None:
+    """Run BM25 retrieval and print top-k text previews."""
     print("===== BM25 Results =====")
     results = bm25_search(query, k=k)
 
@@ -21,6 +21,7 @@ def print_bm25_results(query: str, k: int = 5) -> None:
 
 
 def print_dense_results(query: str, k: int = 5) -> None:
+    """Run dense retrieval and print top-k results with metadata and scores."""
     print("\n===== Dense Retrieval Results =====")
     retriever = DenseRetriever()
     retriever.load_index()
@@ -35,6 +36,7 @@ def print_dense_results(query: str, k: int = 5) -> None:
 
 
 if __name__ == "__main__":
+    # Quick comparison between sparse (BM25) and dense retrieval outputs
     query = "how do i handle overwhelming stress and burnout"
 
     print(f"Query: {query}\n")

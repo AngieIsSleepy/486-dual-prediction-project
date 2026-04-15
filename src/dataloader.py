@@ -2,7 +2,9 @@ import pandas as pd
 import os
 
 class MentalHealthDataLoader:
+    """Utility loader for cleaned mental-health datasets used across team modules."""
     def __init__(self, data_dir="data"):
+        # Base directory where preprocessed CSV files are stored
         self.data_dir = data_dir
 
     def load_classification_data(self):
@@ -14,11 +16,3 @@ class MentalHealthDataLoader:
         """Returns the QA corpus for Member C and D's retrieval"""
         path = os.path.join(self.data_dir, "qa_corpus_clean.csv")
         return pd.read_csv(path)
-
-    # def load_mbti_data(self):
-    #     """Returns the MBTI posts for personality prediction"""
-    #     path = os.path.join(self.data_dir, "mbti_clean.csv")
-    #     return pd.read_csv(path)
-
-# loader = MentalHealthDataLoader()
-# df = loader.load_classification_data()
