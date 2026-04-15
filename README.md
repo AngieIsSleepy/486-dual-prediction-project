@@ -1,4 +1,5 @@
-# Mental Health Support System (Dual-Prediction + Retrieval/Reranking)
+# A Context-Aware Retrieval System for Non-Clinical Mental Health Support
+
 
 A mental-health support demo system that combines:
 
